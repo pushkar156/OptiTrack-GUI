@@ -1,205 +1,144 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { Package, AlertTriangle, ShoppingCart, BarChart3, Database, Warehouse, UserCircle } from 'lucide-react';
-
-const API_BASE = 'http://localhost:5000/api';
+import React, { useState } from 'react';
+import './index.css';
 
 function App() {
-  const [user, setUser] = useState(null);
-  const [stats, setStats] = useState({ totalProducts: 0, lowStockItems: 0, totalOrders: 0 });
-  const [products, setProducts] = useState([]);
-  const [alerts, setAlerts] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [credentials, setCredentials] = useState({ username: '', password: '' });
-  const [error, setError] = useState('');
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [activeTab, setActiveTab] = useState('inventory');
 
-  useEffect(() => {
-    if (user) fetchDashboardData();
-  }, [user]);
+  const inventoryData = [
+    { id: 'OT-902', name: 'NEURAL LINK MOD', category: 'BIO-TECH', hub: 'HUB ALPHA', stock: 8, status: 'CRITICAL' },
+    { id: 'OT-741', name: 'FLUX CAPACITOR', category: 'ENERGY', hub: 'HUB BETA', stock: 45, status: 'OPTIMAL' },
+    { id: 'OT-332', name: 'GRAPHENE SHEET', category: 'MATERIALS', hub: 'HUB GAMMA', stock: 120, status: 'OPTIMAL' },
+    { id: 'OT-105', name: 'OPTIC SENSOR', category: 'HARDWARE', hub: 'HUB OMEGA', stock: 15, status: 'WARNING' },
+    { id: 'OT-882', name: 'QUANTUM PROC', category: 'HARDWARE', hub: 'HUB ALPHA', stock: 42, status: 'OPTIMAL' },
+  ];
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    try {
-      const res = await axios.post(`${API_BASE}/login`, credentials);
-      setUser(res.data);
-      setLoading(false);
-    } catch (err) {
-      setError('Invalid username or password');
-      setLoading(false);
-    }
-  };
-
-  const fetchDashboardData = async () => {
-    setLoading(true);
-    try {
-      const [sRes, pRes, aRes] = await Promise.all([
-        axios.get(`${API_BASE}/stats`),
-        axios.get(`${API_BASE}/products`),
-        axios.get(`${API_BASE}/alerts`)
-      ]);
-      setStats(sRes.data);
-      setProducts(pRes.data);
-      setAlerts(aRes.data);
-      setLoading(false);
-    } catch (err) {
-      console.error("Error fetching data:", err);
-      setLoading(false);
-    }
-  };
-
-  if (!user) {
-    return (
-      <div className="login-view">
-        <div className="login-form glass-card">
-          <Database size={56} color="#a3a6ff" style={{ marginBottom: '1.5rem' }} />
-          <h1 style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>Observatory Login</h1>
-          <p style={{ color: '#a3aac4', fontSize: '0.875rem', marginBottom: '2.5rem' }}>System Integrity: Secure Access Required</p>
-          
-          {error && <div style={{ color: '#ff6e84', marginBottom: '1.5rem', fontSize: '0.875rem' }}>{error}</div>}
-          
-          <form onSubmit={handleLogin}>
-            <div style={{ marginBottom: '1rem' }}>
-              <label className="input-label">Identity</label>
-              <input 
-                type="text" 
-                className="input-field"
-                placeholder="Username (admin/staff)"
-                value={credentials.username}
-                onChange={(e) => setCredentials({...credentials, username: e.target.value})}
-              />
-            </div>
-            <div style={{ marginBottom: '2rem' }}>
-              <label className="input-label">Access Code</label>
-              <input 
-                 type="password" 
-                 className="input-field"
-                 placeholder="••••••••"
-                 value={credentials.password}
-                 onChange={(e) => setCredentials({...credentials, password: e.target.value})}
-              />
-            </div>
-            <button type="submit" disabled={loading} className="primary" style={{ width: '100%' }}>
-              {loading ? 'Authenticating...' : 'Enter System'}
-            </button>
-          </form>
-        </div>
-      </div>
-    );
+  if (!isLoggedIn) {
+    return <LoginPage onLogin={() => setIsLoggedIn(true)} />;
   }
 
   return (
-    <div className="dashboard-container">
-      <header>
-        <div className="logo">
-          <Database size={36} />
-          OptiTrack
-        </div>
-        <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)' }}>{user.name}</div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{user.role}</div>
+    <div className="dashboard-layout">
+      {/* Sidebar */}
+      <aside>
+        <div style={{ padding: '0 2.5rem', marginBottom: '3rem' }}>
+          <div style={{ width: '40px', height: '40px', background: 'var(--primary)', display: 'flex', alignItems: 'center', justify_content: 'center' }}>
+            <span className="material-icons-outlined" style={{ color: '#000' }}>settings_input_component</span>
           </div>
-          {user.role === 'Admin' && <button className="secondary" style={{ padding: '0.6rem 1.2rem', fontSize: '0.875rem' }}>System Console</button>}
-          <button 
-            onClick={() => setUser(null)}
-            className="secondary"
-            style={{ padding: '0.6rem 1.2rem', fontSize: '0.875rem' }}
-          >
-            Terminal Out
-          </button>
         </div>
-      </header>
+        <nav>
+          <NavItem label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
+          <NavItem label="Inventory" active={activeTab === 'inventory'} onClick={() => setActiveTab('inventory')} />
+          <NavItem label="Hub Logistics" active={activeTab === 'logistics'} onClick={() => setActiveTab('logistics')} />
+          <NavItem label="System Alerts" active={activeTab === 'alerts'} onClick={() => setActiveTab('alerts')} />
+          <NavItem label="Access Logs" active={activeTab === 'logs'} onClick={() => setActiveTab('logs')} />
+        </nav>
+        
+        <div style={{ marginTop: 'auto', padding: '0 2.5rem' }}>
+          <p style={{ color: '#444', fontSize: '0.7rem', fontWeight: 800, letterSpacing: '0.2em' }}>VERSION 4.2.0</p>
+        </div>
+      </aside>
 
-      <section style={{ marginBottom: '3rem' }}>
-        <h1 style={{ fontSize: '2.5rem', fontWeight: 300, marginBottom: '0.5rem' }}>{user.role} Overview</h1>
-        <p style={{ color: 'var(--text-secondary)', maxWidth: '600px' }}>Real-time synchronization across logistics hubs. Inventory integrity is currently <span style={{ color: 'var(--primary)' }}>99.8%</span>.</p>
-      </section>
+      {/* Main Content */}
+      <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+        {/* Top Nav */}
+        <header className="top-nav">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <span className="material-icons-outlined" style={{ color: 'var(--primary)' }}>radar</span>
+            <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.2rem', letterSpacing: '0.1em' }}>OPTITRACK</span>
+          </div>
+          <button className="btn-control" onClick={() => setIsLoggedIn(false)}>ADMIN CONTROL CENTER</button>
+        </header>
 
-      {/* Stats Section */}
-      <div className="stats-grid">
-        <div className="glass-card">
-          <div className="stat-label">Total Fleet Units</div>
-          <div className="stat-value">{stats.totalProducts}</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary)', fontSize: '0.75rem' }}>
-            <BarChart3 size={14} /> +12% from last cycle
-          </div>
-        </div>
-        <div className="glass-card">
-          <div className="stat-label">Critical Flux</div>
-          <div className="stat-value" style={{ color: stats.lowStockItems > 0 ? 'var(--error)' : 'inherit' }}>
-            {stats.lowStockItems}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
-            <AlertTriangle size={14} /> Requires attention
-          </div>
-        </div>
-        <div className="glass-card">
-          <div className="stat-label">Protocol Shifts</div>
-          <div className="stat-value">{stats.totalOrders}</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary)', fontSize: '0.75rem' }}>
-            <ShoppingCart size={14} /> Real-time active
-          </div>
-        </div>
-      </div>
+        <main>
+          {/* Metrics */}
+          <section className="metrics-grid">
+            <MetricCard label="TOTAL ASSETS" value="1,284" />
+            <MetricCard label="CRITICAL ALERTS" value="09" isCritical />
+            <MetricCard label="ACTIVE HUBS" value="14" />
+          </section>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '2.5rem', alignItems: 'start' }}>
-        {/* Inventory List */}
-        <section className="glass-card" style={{ padding: '2rem' }}>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '2rem', letterSpacing: '0.05em' }}>Inventory Integrity Flux</h2>
-          <table className="inventory-table">
-            <thead>
-              <tr>
-                <th>Identifier</th>
-                <th>Classification</th>
-                <th>Magnitude</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {products.map(p => (
-                <tr key={p.id}>
-                  <td style={{ fontWeight: 600 }}>{p.pname}</td>
-                  <td style={{ color: 'var(--text-secondary)' }}>{p.category}</td>
-                  <td>{p.total_stock || 0} units</td>
-                  <td>
-                    <span className={`status-chip ${p.total_stock <= 10 ? 'status-error' : 'status-stable'}`}>
-                      {p.total_stock <= 10 ? 'DEPLETED' : 'STABLE'}
-                    </span>
-                  </td>
+          {/* Table */}
+          <section>
+            <h2 className="section-title">Active Inventory Flux</h2>
+            <table className="status-table">
+              <thead>
+                <tr>
+                  <th>Asset ID</th>
+                  <th>Product Name</th>
+                  <th>Category</th>
+                  <th>Location</th>
+                  <th>Stock</th>
+                  <th>Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
-
-        {/* Localized Alerts */}
-        <aside className="glass-card" style={{ padding: '1.5rem' }}>
-          <h3 style={{ fontSize: '0.875rem', fontWeight: 700, marginBottom: '1.5rem', color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.1em', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <Warehouse size={18} /> Logistics Alerts
-          </h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-            {alerts.length > 0 ? alerts.map((alert, idx) => (
-              <div key={idx} style={{ paddingBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-                <div style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.25rem' }}>{alert.product_name}</div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                  Location: <span style={{ color: 'var(--text-primary)' }}>{alert.warehouse_name}</span>
-                </div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--error)', marginTop: '0.25rem', fontWeight: 700 }}>
-                   Critical: {alert.items_remaining} units
-                </div>
-              </div>
-            )) : (
-              <div style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', textAlign: 'center', padding: '1rem' }}>
-                All systems reporting functional levels.
-              </div>
-            )}
-          </div>
-        </aside>
+              </thead>
+              <tbody>
+                {inventoryData.map((item) => (
+                  <tr key={item.id}>
+                    <td style={{ color: 'var(--primary)', fontWeight: 700 }}>{item.id}</td>
+                    <td style={{ fontWeight: 600 }}>{item.name}</td>
+                    <td style={{ color: '#666' }}>{item.category}</td>
+                    <td>{item.hub}</td>
+                    <td>{item.stock} UNITS</td>
+                    <td>
+                      <span className={`badge ${item.status.toLowerCase()}`}>
+                        {item.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        </main>
       </div>
     </div>
   );
 }
 
+function LoginPage({ onLogin }) {
+  return (
+    <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#000' }}>
+      <div style={{ width: '400px', padding: '4rem', border: '1px solid #222', background: '#0D0D0D', textAlign: 'center' }}>
+        <div style={{ color: 'var(--primary)', marginBottom: '2rem' }}>
+          <span className="material-icons-outlined" style={{ fontSize: '3rem' }}>radar</span>
+        </div>
+        <h1 style={{ fontFamily: 'var(--font-display)', color: 'var(--primary)', fontSize: '2rem', marginBottom: '1rem', textTransform: 'uppercase' }}>Initialize System</h1>
+        <p style={{ color: '#666', marginBottom: '3rem', fontSize: '0.9rem' }}>ENTER SECURITY CREDENTIALS TO GAIN ACCESS</p>
+        
+        <form onSubmit={(e) => { e.preventDefault(); onLogin(); }} style={{ textAlign: 'left' }}>
+          <div style={{ marginBottom: '1.5rem' }}>
+            <label style={{ color: '#444', fontSize: '0.7rem', fontWeight: 800, letterSpacing: '0.1em', display: 'block', marginBottom: '0.5rem' }}>OPERATOR ID</label>
+            <input type="text" style={{ width: '100%', padding: '1rem', background: '#111', border: 'none', borderBottom: '2px solid #222', color: '#fff' }} placeholder="ADMIN_USR" />
+          </div>
+          <div style={{ marginBottom: '2.5rem' }}>
+            <label style={{ color: '#444', fontSize: '0.7rem', fontWeight: 800, letterSpacing: '0.1em', display: 'block', marginBottom: '0.5rem' }}>SECURITY KEY</label>
+            <input type="password" style={{ width: '100%', padding: '1rem', background: '#111', border: 'none', borderBottom: '2px solid #222', color: '#fff' }} placeholder="••••••••" />
+          </div>
+          <button type="submit" className="btn-control" style={{ width: '100%' }}>Establish Connection</button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function NavItem({ label, active, onClick }) {
+  return (
+    <div className={`nav-item ${active ? 'active' : ''}`} onClick={onClick}>
+      {label}
+    </div>
+  );
+}
+
+function MetricCard({ label, value, isCritical }) {
+  return (
+    <div className={`metric-card ${isCritical ? 'critical' : ''}`}>
+      <p className="metric-label">{label}</p>
+      <p className="metric-value">{value}</p>
+    </div>
+  );
+}
+
 export default App;
+
+

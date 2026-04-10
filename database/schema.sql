@@ -3,7 +3,7 @@
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
-SET time_zone = "+00:00";
+SET time_zone = "+05:30";
 
 -- Drop database if exists to allow for clean re-initialization
 DROP DATABASE IF EXISTS OptiTrack;
@@ -11,7 +11,6 @@ CREATE DATABASE OptiTrack;
 USE OptiTrack;
 
 -- 1. Categories Table
--- Stores product classifications like 'Electronics', 'Storage', etc.
 CREATE TABLE categories (
     id INT AUTO_INCREMENT PRIMARY KEY,
     cname VARCHAR(100) NOT NULL UNIQUE,
@@ -20,7 +19,6 @@ CREATE TABLE categories (
 );
 
 -- 2. Suppliers Table
--- Stores vendors who provide products.
 CREATE TABLE suppliers (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
@@ -31,7 +29,6 @@ CREATE TABLE suppliers (
 );
 
 -- 3. Products Table
--- Core items tracked in the inventory.
 CREATE TABLE products (
     id INT AUTO_INCREMENT PRIMARY KEY,
     pname VARCHAR(100) NOT NULL,
@@ -42,7 +39,6 @@ CREATE TABLE products (
 );
 
 -- 4. Supplier_Products Table (Associative)
--- Links suppliers to the products they can provide.
 CREATE TABLE supplier_products (
     id INT AUTO_INCREMENT PRIMARY KEY,
     supplier_id INT NOT NULL,
@@ -53,7 +49,6 @@ CREATE TABLE supplier_products (
 );
 
 -- 5. Warehouses Table
--- Storage locations for inventory.
 CREATE TABLE warehouses (
     id INT AUTO_INCREMENT PRIMARY KEY,
     w_name VARCHAR(100) NOT NULL UNIQUE,
@@ -63,7 +58,6 @@ CREATE TABLE warehouses (
 );
 
 -- 6. Product_Warehouses Table (Associative)
--- Tracks the quantity of a product in a specific warehouse.
 CREATE TABLE product_warehouses (
     id INT AUTO_INCREMENT PRIMARY KEY,
     product_id INT NOT NULL,
@@ -76,33 +70,30 @@ CREATE TABLE product_warehouses (
 );
 
 -- 7. Employees Table
--- Staff management with hierarchy support.
 CREATE TABLE employees (
     id INT AUTO_INCREMENT PRIMARY KEY,
     ename VARCHAR(100) NOT NULL,
     role VARCHAR(50) NOT NULL,
     dob DATE,
-    age INT AS (YEAR(CURDATE()) - YEAR(dob)), -- Virtual generated column for normalized age
+    age INT AS (YEAR(CURDATE()) - YEAR(dob)), 
     manager_id INT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (manager_id) REFERENCES employees(id) ON DELETE SET NULL
 );
 
 -- 8. Customers Table
--- Client information.
 CREATE TABLE customers (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     email VARCHAR(100) UNIQUE,
     address TEXT,
     contact VARCHAR(20),
-    employee_id INT, -- Designated representative
+    employee_id INT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE SET NULL
 );
 
 -- 9. Orders Table
--- Transaction records of product sales/movements to customers.
 CREATE TABLE orders (
     id INT AUTO_INCREMENT PRIMARY KEY,
     order_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
