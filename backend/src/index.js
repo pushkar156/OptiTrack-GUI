@@ -22,7 +22,7 @@ const pool = mysql.createPool({
 
 // --- API ENDPOINTS ---
 
-// 1. Get Dashboard Stats
+// 1. Dashboard Stats
 app.get('/api/stats', async (req, res) => {
     try {
         const [products] = await pool.query('SELECT COUNT(*) as count FROM products');
@@ -39,15 +39,19 @@ app.get('/api/stats', async (req, res) => {
     }
 });
 
-// 2. Get Inventory List (using our view)
+// 2. Full Inventory List
 app.get('/api/inventory', async (req, res) => {
     try {
         const [rows] = await pool.query(`
-            SELECT p.id, p.pname as name, w.w_name as warehouse, pw.stock, 
-            CASE WHEN pw.stock <= 10 THEN 'Critical' ELSE 'Stable' END as status
+            SELECT p.id as asset_id, p.pname as name, c.name as category, 
+                   w.w_name as hub, pw.stock, 
+                   CASE WHEN pw.stock <= 10 THEN 'CRITICAL' 
+                        WHEN pw.stock <= 25 THEN 'WARNING' 
+                        ELSE 'OPTIMAL' END as status
             FROM products p
             JOIN product_warehouses pw ON p.id = pw.product_id
             JOIN warehouses w ON pw.warehouse_id = w.id
+            JOIN categories c ON p.category_id = c.id
         `);
         res.json(rows);
     } catch (err) {
@@ -55,7 +59,19 @@ app.get('/api/inventory', async (req, res) => {
     }
 });
 
-// 3. Place Order (Tests the Trigger!)
+// 3. Get Supporting Data for Order Form
+app.get('/api/metadata', async (req, res) => {
+    try {
+        const [products] = await pool.query('SELECT id, pname as name FROM products');
+        const [warehouses] = await pool.query('SELECT id, w_name as name FROM warehouses');
+        const [customers] = await pool.query('SELECT id, name FROM customers');
+        res.json({ products, warehouses, customers });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 4. Place Order (Tests SQL Trigger)
 app.post('/api/orders', async (req, res) => {
     const { product_id, warehouse_id, customer_id, quantity, price } = req.body;
     try {
@@ -63,13 +79,40 @@ app.post('/api/orders', async (req, res) => {
             'INSERT INTO orders (product_id, warehouse_id, customer_id, quantity, price) VALUES (?, ?, ?, ?, ?)',
             [product_id, warehouse_id, customer_id, quantity, price]
         );
-        res.json({ message: 'Order placed successfully. Inventory updated!' });
+        res.json({ success: true, message: 'Order synchronized across logistics network.' });
     } catch (err) {
-        // This will capture the SIGNAL error from our SQL trigger!
+        // Trigger SIGNAL errors caught here
         res.status(400).json({ error: err.message });
     }
 });
 
+// 5. Recent Alerts (for dashboard)
+app.get('/api/alerts', async (req, res) => {
+    try {
+        const [rows] = await pool.query('SELECT * FROM view_low_stock_alerts LIMIT 5');
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 6. Hub Logistics Data
+app.get('/api/hubs', async (req, res) => {
+    try {
+        const [rows] = await pool.query(`
+            SELECT w.id, w.w_name as name, w.location, w.capacity,
+            SUM(pw.stock) as current_stock,
+            (SUM(pw.stock) / w.capacity * 100) as utilization
+            FROM warehouses w
+            LEFT JOIN product_warehouses pw ON w.id = pw.warehouse_id
+            GROUP BY w.id
+        `);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.listen(PORT, () => {
-    console.log(`OptiTrack Backend listening on port ${PORT}`);
+    console.log(`OptiTrack Backend initialized on port ${PORT}`);
 });
