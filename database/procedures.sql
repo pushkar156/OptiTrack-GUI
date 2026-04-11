@@ -1,12 +1,10 @@
--- OptiTrack Inventory Control System
--- Advanced Database Objects (Phase 2: Triggers, Views & Procedures)
-
 USE OptiTrack;
 
+-- Run this block together
 DELIMITER //
 
--- 1. TRIGGER: Update Inventory on New Order
-DROP TRIGGER IF EXISTS tr_update_stock_on_order;
+DROP TRIGGER IF EXISTS tr_update_stock_on_order//
+
 CREATE TRIGGER tr_update_stock_on_order
 BEFORE INSERT ON orders
 FOR EACH ROW
@@ -30,8 +28,7 @@ BEGIN
         WHERE product_id = NEW.product_id 
           AND warehouse_id = NEW.warehouse_id;
     END IF;
-END;
-//
+END //
 
 DELIMITER ;
 
@@ -67,6 +64,8 @@ JOIN warehouses w ON o.warehouse_id = w.id;
 -- 4. PROCEDURE: Standardized Restocking
 DELIMITER //
 
+DROP PROCEDURE IF EXISTS sp_restock_item //
+
 CREATE PROCEDURE sp_restock_item(
     IN p_id INT, 
     IN w_id INT, 
@@ -76,7 +75,18 @@ BEGIN
     INSERT INTO product_warehouses (product_id, warehouse_id, stock)
     VALUES (p_id, w_id, qty)
     ON DUPLICATE KEY UPDATE stock = stock + qty;
-END;
-//
+END //
 
 DELIMITER ;
+
+-- 5. VIEW: Employee Details (with dynamic age calculation)
+CREATE OR REPLACE VIEW view_employee_details AS
+SELECT 
+    id,
+    ename,
+    role,
+    dob,
+    TIMESTAMPDIFF(YEAR, dob, CURDATE()) AS age,
+    manager_id,
+    created_at
+FROM employees;

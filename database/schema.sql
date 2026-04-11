@@ -1,6 +1,5 @@
 -- OptiTrack Inventory Control System
 -- Database Initialization Script (Phase 1: Foundation)
-
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
 SET time_zone = "+05:30";
@@ -75,7 +74,6 @@ CREATE TABLE employees (
     ename VARCHAR(100) NOT NULL,
     role VARCHAR(50) NOT NULL,
     dob DATE,
-    age INT AS (YEAR(CURDATE()) - YEAR(dob)), 
     manager_id INT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (manager_id) REFERENCES employees(id) ON DELETE SET NULL

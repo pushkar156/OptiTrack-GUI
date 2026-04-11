@@ -43,7 +43,7 @@ app.get('/api/stats', async (req, res) => {
 app.get('/api/inventory', async (req, res) => {
     try {
         const [rows] = await pool.query(`
-            SELECT p.id as asset_id, p.pname as name, c.name as category, 
+            SELECT p.id as asset_id, p.pname as name, c.cname as category, 
                    w.w_name as hub, pw.stock, 
                    CASE WHEN pw.stock <= 10 THEN 'CRITICAL' 
                         WHEN pw.stock <= 25 THEN 'WARNING' 
