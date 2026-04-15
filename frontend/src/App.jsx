@@ -4,17 +4,24 @@ import './index.css';
 const API_URL = 'http://localhost:5000/api';
 
 function App() {
-  const [auth, setAuth] = useState({ isLoggedIn: false, role: null });
+  const [auth, setAuth] = useState(() => {
+    const saved = localStorage.getItem('optitrack_auth');
+    return saved ? JSON.parse(saved) : { isLoggedIn: false, role: null };
+  });
+  
   const [activeTab, setActiveTab] = useState('inventory');
   const [stats, setStats] = useState({ totalProducts: 0, lowStockCount: 0, ordersProcessed: 0 });
   const [inventory, setInventory] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [hubs, setHubs] = useState([]);
+  const [shipments, setShipments] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isRestockOpen, setIsRestockOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
+    localStorage.setItem('optitrack_auth', JSON.stringify(auth));
     if (auth.isLoggedIn) {
       fetchDashboardData();
     }
@@ -23,29 +30,32 @@ function App() {
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      const [statsRes, invRes, alertsRes, hubsRes] = await Promise.all([
+      const [statsRes, invRes, alertsRes, hubsRes, shipRes] = await Promise.all([
         fetch(`${API_URL}/stats`),
         fetch(`${API_URL}/inventory`),
         fetch(`${API_URL}/alerts`),
-        fetch(`${API_URL}/hubs`)
+        fetch(`${API_URL}/hubs`),
+        fetch(`${API_URL}/shipments`)
       ]);
       
       const statsData = await statsRes.json();
       const invData = await invRes.json();
       const alertsData = await alertsRes.json();
       const hubsData = await hubsRes.json();
+      const shipData = await shipRes.json();
       
       setStats(statsData.error ? { totalProducts: 0, lowStockCount: 0, ordersProcessed: 0 } : statsData);
       setInventory(Array.isArray(invData) ? invData : []);
       setAlerts(Array.isArray(alertsData) ? alertsData : []);
       setHubs(Array.isArray(hubsData) ? hubsData : []);
+      setShipments(Array.isArray(shipData) ? shipData : []);
       
     } catch (err) {
       console.error('System synchronization failed:', err);
-      // Fallback to empty states to prevent crash
       setInventory([]);
       setAlerts([]);
       setHubs([]);
+      setShipments([]);
     } finally {
       setLoading(false);
     }
@@ -111,23 +121,25 @@ function App() {
 
           {activeTab === 'inventory' && (
             <section>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-                <h2 className="section-title">Active Inventory Flux</h2>
-                <div style={{ display: 'flex', gap: '1rem' }}>
-                  <div style={{ position: 'relative' }}>
-                    <span className="material-icons-outlined" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '1rem', color: '#444' }}>search</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3rem' }}>
+                <h2 className="section-title" style={{ margin: 0 }}>Active Inventory Flux</h2>
+                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <span className="material-icons-outlined" style={{ position: 'absolute', left: '1.25rem', color: '#666', fontSize: '1.1rem', pointerEvents: 'none' }}>search</span>
                     <input 
                       type="text" 
                       placeholder="SEARCH ASSET ID / NAME..." 
+                      className="search-input"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      style={{ padding: '0.5rem 1rem 0.5rem 2.5rem', background: '#111', border: '1px solid #222', color: '#fff', fontSize: '0.7rem', width: '250px' }}
+                      style={{ paddingLeft: '3.5rem', width: '320px', border: 'none' }}
                     />
                   </div>
                   {isAdmin && (
-                    <button className="btn-control" onClick={() => setIsModalOpen(true)} style={{ padding: '0.5rem 1.5rem', fontSize: '0.7rem' }}>
-                      + INIT NEW SHIPMENT
-                    </button>
+                    <>
+                      <button className="btn-control" style={{ height: '48px' }} onClick={() => setIsRestockOpen(true)}>+ RESTOCK</button>
+                      <button className="btn-control" style={{ height: '48px' }} onClick={() => setIsModalOpen(true)}>+ SHIPMENT</button>
+                    </>
                   )}
                 </div>
               </div>
@@ -141,7 +153,6 @@ function App() {
                     <th>Location</th>
                     <th>Stock</th>
                     <th>Status</th>
-                    {isAdmin && <th>Actions</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -157,13 +168,6 @@ function App() {
                           {item.status}
                         </span>
                       </td>
-                      {isAdmin && (
-                        <td>
-                          <button style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer' }}>
-                            <span className="material-icons-outlined">settings</span>
-                          </button>
-                        </td>
-                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -228,7 +232,7 @@ function App() {
 
           {activeTab === 'logs' && (
             <section>
-              <h2 className="section-title">Audit Trail & Access Logs</h2>
+              <h2 className="section-title">Audit Trail & Shipment Ledger</h2>
               <table className="status-table" style={{ marginTop: '2rem' }}>
                 <thead>
                   <tr>
@@ -242,14 +246,28 @@ function App() {
                   </tr>
                 </thead>
                 <tbody>
-                  {/* We can use the inventory data or a separate logs fetch if we had a dedicated endpoint */}
-                  {/* For now, let's assume we have some order history data available */}
-                  <tr style={{ opacity: 0.5 }}>
-                    <td colSpan="7" style={{ textAlign: 'center', padding: '4rem', color: '#444' }}>
-                      <span className="material-icons-outlined" style={{ display: 'block', fontSize: '2rem', marginBottom: '1rem' }}>history</span>
-                      SYSTEM LOGS FULLY SYNCHRONIZED WITH DATABASE ENCRYPTION
-                    </td>
-                  </tr>
+                  {shipments.length > 0 ? shipments.map((s) => (
+                    <tr key={s.order_id}>
+                      <td style={{ color: 'var(--primary)', fontWeight: 800 }}>#ORDER-{s.order_id}</td>
+                      <td>{new Date(s.order_date).toLocaleString()}</td>
+                      <td>{s.product_name}</td>
+                      <td>{s.customer_name}</td>
+                      <td>{s.quantity}</td>
+                      <td style={{ fontWeight: 600 }}>C {s.total_bill}</td>
+                      <td>
+                        <span className={`status-badge ${s.status?.toLowerCase()}`}>
+                          {s.status?.toUpperCase()}
+                        </span>
+                      </td>
+                    </tr>
+                  )) : (
+                    <tr>
+                      <td colSpan="7" style={{ textAlign: 'center', padding: '4rem', color: '#444' }}>
+                        <span className="material-icons-outlined" style={{ display: 'block', fontSize: '2rem', marginBottom: '1rem' }}>history</span>
+                        NO SHIPMENT LOGS DETECTED IN LOCAL NETWORK
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </section>
@@ -258,6 +276,74 @@ function App() {
       </div>
 
       {isModalOpen && <OrderModal onClose={() => setIsModalOpen(false)} onRefresh={fetchDashboardData} />}
+      {isRestockOpen && <RestockModal onClose={() => setIsRestockOpen(false)} onRefresh={fetchDashboardData} />}
+    </div>
+  );
+}
+
+function RestockModal({ onClose, onRefresh }) {
+  const [metadata, setMetadata] = useState({ products: [], warehouses: [], customers: [] });
+  const [formData, setFormData] = useState({ product_id: '', warehouse_id: '', quantity: 10 });
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    fetch(`${API_URL}/metadata`)
+      .then(res => res.json())
+      .then(data => setMetadata(data))
+      .catch(err => console.error('Metadata sync failed:', err));
+  }, []);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError(null);
+    try {
+      const res = await fetch(`${API_URL}/restock`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'RESTOCK_SYSTEM_FAILURE');
+      
+      onRefresh();
+      onClose();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-content" style={{ maxWidth: '450px' }}>
+        <h2 className="section-title" style={{ marginBottom: '2rem' }}>INBOUND RESTOCK</h2>
+        
+        {error && <div style={{ background: 'rgba(255,0,0,0.05)', color: '#ff4444', padding: '1rem', marginBottom: '1.5rem', fontSize: '0.7rem', border: '1px solid rgba(255,68,68,0.2)' }}>[SYSTEM_ERROR]: {error.toUpperCase()}</div>}
+
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label>TARGET ASSET</label>
+            <select required value={formData.product_id} onChange={e => setFormData({...formData, product_id: e.target.value})}>
+              <option value="">SELECT PRODUCT</option>
+              {metadata.products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>RECEIVING HUB</label>
+            <select required value={formData.warehouse_id} onChange={e => setFormData({...formData, warehouse_id: e.target.value})}>
+              <option value="">SELECT WAREHOUSE</option>
+              {metadata.warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>UNIT COUNT (ADDITION)</label>
+            <input type="number" required value={formData.quantity} onChange={e => setFormData({...formData, quantity: e.target.value})} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '2.5rem' }}>
+            <button type="button" className="btn-control" style={{ background: 'transparent' }} onClick={onClose}>ABORT</button>
+            <button type="submit" className="btn-control">RESTOCK</button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
@@ -366,11 +452,23 @@ function OrderModal({ onClose, onRefresh }) {
 function LoginPage({ onLogin }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
 
   const handleAuth = (e) => {
     e.preventDefault();
-    const role = username.toLowerCase().includes('admin') ? 'ADMIN' : 'STAFF';
-    onLogin(role);
+    setError('');
+
+    // --- CONFIGURE YOUR CREDENTIALS HERE ---
+    const ADMIN_CREDENTIALS = { user: 'admin', pass: 'admin123' };
+    const STAFF_CREDENTIALS = { user: 'staff', pass: 'staff123' };
+
+    if (username === ADMIN_CREDENTIALS.user && password === ADMIN_CREDENTIALS.pass) {
+      onLogin('ADMIN');
+    } else if (username === STAFF_CREDENTIALS.user && password === STAFF_CREDENTIALS.pass) {
+      onLogin('STAFF');
+    } else {
+      setError('INVALID CREDENTIALS: ACCESS DENIED');
+    }
   };
 
   return (
@@ -382,6 +480,8 @@ function LoginPage({ onLogin }) {
         <h1 style={{ fontFamily: 'var(--font-display)', color: 'var(--primary)', fontSize: '2rem', marginBottom: '1rem', textTransform: 'uppercase' }}>Initialize System</h1>
         <p style={{ color: '#666', marginBottom: '3rem', fontSize: '0.9rem' }}>ENTER SECURITY CREDENTIALS TO GAIN ACCESS</p>
         
+        {error && <div style={{ color: '#ff4444', fontSize: '0.7rem', marginBottom: '2rem', border: '1px solid rgba(255,0,0,0.2)', padding: '1rem', background: 'rgba(255,0,0,0.05)' }}>[SECURITY_ALERT]: {error}</div>}
+
         <form onSubmit={handleAuth} style={{ textAlign: 'left' }}>
           <div style={{ marginBottom: '1.5rem' }}>
             <label style={{ color: '#444', fontSize: '0.7rem', fontWeight: 800, letterSpacing: '0.1em', display: 'block', marginBottom: '0.5rem' }}>OPERATOR ID</label>
@@ -390,7 +490,7 @@ function LoginPage({ onLogin }) {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               style={{ width: '100%', padding: '1rem', background: '#111', border: 'none', borderBottom: '2px solid #222', color: '#fff' }} 
-              placeholder="Enter name (e.g. 'Pushkar Admin')" 
+              placeholder="Username" 
               required
             />
           </div>
@@ -401,7 +501,7 @@ function LoginPage({ onLogin }) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               style={{ width: '100%', padding: '1rem', background: '#111', border: 'none', borderBottom: '2px solid #222', color: '#fff' }} 
-              placeholder="••••••••" 
+              placeholder="Password" 
               required
             />
           </div>

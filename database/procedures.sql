@@ -1,38 +1,15 @@
+-- =============================================
+-- OPTITRACK ADVANCED RELATIONAL LOGIC (MASTER)
+-- This file contains all Procedures, Triggers, and Views
+-- =============================================
+
 USE OptiTrack;
 
--- Run this block together
-DELIMITER //
+-- ---------------------------------------------------------
+-- PART 1: SYSTEM VIEWS (Real-time Analytics)
+-- ---------------------------------------------------------
 
-DROP TRIGGER IF EXISTS tr_update_stock_on_order//
-
-CREATE TRIGGER tr_update_stock_on_order
-BEFORE INSERT ON orders
-FOR EACH ROW
-BEGIN
-    DECLARE current_stock INT;
-    
-    SELECT stock INTO current_stock 
-    FROM product_warehouses 
-    WHERE product_id = NEW.product_id 
-      AND warehouse_id = NEW.warehouse_id;
-    
-    IF current_stock IS NULL THEN
-        SIGNAL SQLSTATE '45000' 
-        SET MESSAGE_TEXT = 'Error: Product not found in the specified warehouse.';
-    ELSEIF current_stock < NEW.quantity THEN
-        SIGNAL SQLSTATE '45000' 
-        SET MESSAGE_TEXT = 'Error: Insufficient stock for this order.';
-    ELSE
-        UPDATE product_warehouses 
-        SET stock = stock - NEW.quantity 
-        WHERE product_id = NEW.product_id 
-          AND warehouse_id = NEW.warehouse_id;
-    END IF;
-END //
-
-DELIMITER ;
-
--- 2. VIEW: Low Stock Alerts
+-- 1. View for Low Stock Monitoring
 CREATE OR REPLACE VIEW view_low_stock_alerts AS
 SELECT 
     p.id AS product_id,
@@ -44,7 +21,7 @@ JOIN product_warehouses pw ON p.id = pw.product_id
 JOIN warehouses w ON pw.warehouse_id = w.id
 WHERE pw.stock <= 10;
 
--- 3. VIEW: Complete Order Summary
+-- 2. View for Complete Order Audit Trail
 CREATE OR REPLACE VIEW view_order_summary AS
 SELECT 
     o.id AS order_id,
@@ -61,32 +38,80 @@ JOIN customers c ON o.customer_id = c.id
 JOIN products p ON o.product_id = p.id
 JOIN warehouses w ON o.warehouse_id = w.id;
 
--- 4. PROCEDURE: Standardized Restocking
+-- 3. View for Employee Dynamic Age Calculation
+CREATE OR REPLACE VIEW view_employee_details AS
+SELECT 
+    id, ename, role, dob, manager_id,
+    TIMESTAMPDIFF(YEAR, dob, CURDATE()) AS age
+FROM employees;
+
+
+-- ---------------------------------------------------------
+-- PART 2: STORED PROCEDURES (Control Logic)
+-- ---------------------------------------------------------
+
 DELIMITER //
 
-DROP PROCEDURE IF EXISTS sp_restock_item //
-
-CREATE PROCEDURE sp_restock_item(
-    IN p_id INT, 
-    IN w_id INT, 
-    IN qty INT
-)
+-- 1. Restock Procedure (Handles Inbound Logistics)
+CREATE PROCEDURE sp_restock_item(IN p_id INT, IN w_id INT, IN qty INT)
 BEGIN
     INSERT INTO product_warehouses (product_id, warehouse_id, stock)
     VALUES (p_id, w_id, qty)
     ON DUPLICATE KEY UPDATE stock = stock + qty;
 END //
 
+-- 2. Audit Cursor Procedure (Advanced Batch Processing)
+-- Scans all warehouses and logs critical alerts per row
+CREATE PROCEDURE sp_run_system_audit()
+BEGIN
+    DECLARE done INT DEFAULT FALSE;
+    DECLARE p_id INT;
+    DECLARE p_name VARCHAR(100);
+    DECLARE current_stock INT;
+    
+    DECLARE low_stock_cursor CURSOR FOR 
+        SELECT p.id, p.pname, pw.stock 
+        FROM products p 
+        JOIN product_warehouses pw ON p.id = pw.product_id 
+        WHERE pw.stock < 10;
+        
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+    
+    OPEN low_stock_cursor;
+    
+    read_loop: LOOP
+        FETCH low_stock_cursor INTO p_id, p_name, current_stock;
+        IF done THEN
+            LEAVE read_loop;
+        END IF;
+        
+        INSERT INTO audit_logs (action_type, entity_id, details)
+        VALUES ('AUTO_ALERT', p_id, CONCAT('System Audit: Critical Stock (', current_stock, ') of ', p_name));
+    END LOOP;
+    
+    CLOSE low_stock_cursor;
+    
+    SELECT 'SYSTEM_AUDIT_SUCCESS' AS Status;
+END //
+
 DELIMITER ;
 
--- 5. VIEW: Employee Details (with dynamic age calculation)
-CREATE OR REPLACE VIEW view_employee_details AS
-SELECT 
-    id,
-    ename,
-    role,
-    dob,
-    TIMESTAMPDIFF(YEAR, dob, CURDATE()) AS age,
-    manager_id,
-    created_at
-FROM employees;
+
+-- ---------------------------------------------------------
+-- PART 3: TRIGGERS (Automated Data Integrity)
+-- ---------------------------------------------------------
+
+DELIMITER //
+
+-- Auto-update inventory when a shipment (order) is recorded
+DROP TRIGGER IF EXISTS tr_update_stock_on_order//
+CREATE TRIGGER tr_update_stock_on_order
+AFTER INSERT ON orders
+FOR EACH ROW
+BEGIN
+    UPDATE product_warehouses
+    SET stock = stock - NEW.quantity
+    WHERE product_id = NEW.product_id AND warehouse_id = NEW.warehouse_id;
+END //
+
+DELIMITER ;

@@ -14,28 +14,37 @@ const pool = mysql.createPool({
     host: process.env.DB_HOST || 'localhost',
     user: process.env.DB_USER || 'root',
     password: process.env.DB_PASSWORD || '',
-    database: 'OptiTrack',
+    database: process.env.DB_NAME || 'OptiTrack',
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0
 });
 
+// Verification query on startup
+pool.query('SELECT 1').then(() => {
+    console.log('✅ DATABASE_SYNC_CONNECTED: RELATIONAL_CHANNEL_OPEN');
+}).catch(err => {
+    console.error('❌ DATABASE_SYNC_FAILED: ACCESS_DENIED_OR_OFFLINE');
+    console.error('ERROR_DETAILS:', err.message);
+});
+
 // --- API ENDPOINTS ---
 
-// 1. Dashboard Stats
+// 1. Dashboard Stats (Resilient Mapping)
 app.get('/api/stats', async (req, res) => {
+    const results = { totalProducts: 0, lowStockCount: 0, ordersProcessed: 0 };
     try {
-        const [products] = await pool.query('SELECT COUNT(*) as count FROM products');
-        const [lowStock] = await pool.query('SELECT COUNT(*) as count FROM view_low_stock_alerts');
-        const [orders] = await pool.query('SELECT COUNT(*) as count FROM orders');
+        const [p] = await pool.query('SELECT COUNT(*) as count FROM products').catch(e => (console.error('Stats[Products] Fail:', e.message), [[]]));
+        const [l] = await pool.query('SELECT COUNT(*) as count FROM view_low_stock_alerts').catch(e => (console.error('Stats[Alerts] Fail:', e.message), [[]]));
+        const [o] = await pool.query('SELECT COUNT(*) as count FROM orders').catch(e => (console.error('Stats[Orders] Fail:', e.message), [[]]));
         
         res.json({
-            totalProducts: products[0].count,
-            lowStockCount: lowStock[0].count,
-            ordersProcessed: orders[0].count
+            totalProducts: p[0]?.count || 0,
+            lowStockCount: l[0]?.count || 0,
+            ordersProcessed: o[0]?.count || 0
         });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'CORE_SYNC_FAILURE' });
     }
 });
 
@@ -108,6 +117,27 @@ app.get('/api/hubs', async (req, res) => {
             GROUP BY w.id
         `);
         res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 7. Full Shipment Ledger (from view_order_summary)
+app.get('/api/shipments', async (req, res) => {
+    try {
+        const [rows] = await pool.query('SELECT * FROM view_order_summary ORDER BY order_date DESC');
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 8. Restock Asset (Calls Stored Procedure)
+app.post('/api/restock', async (req, res) => {
+    const { product_id, warehouse_id, quantity } = req.body;
+    try {
+        await pool.query('CALL sp_restock_item(?, ?, ?)', [product_id, warehouse_id, quantity]);
+        res.json({ success: true, message: 'Restock procedure executed successfully.' });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
